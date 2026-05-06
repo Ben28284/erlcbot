@@ -10,6 +10,7 @@ const {
   ButtonStyle
 } = require('discord.js');
 
+const fs = require('fs');
 require('dotenv').config();
 
 const client = new Client({
@@ -18,27 +19,59 @@ const client = new Client({
 
 let activeSession = null;
 
-// 🔐 PUT YOUR STAFF ROLE ID HERE
-const STAFF_ROLE_ID = '1494558019164311590';
+// 📁 LOAD CONFIG
+let config = {};
+if (fs.existsSync('./config.json')) {
+  config = JSON.parse(fs.readFileSync('./config.json'));
+}
 
-// 🔧 COMMANDS
+// 💾 SAVE CONFIG
+function saveConfig() {
+  fs.writeFileSync('./config.json', JSON.stringify(config, null, 2));
+}
+
+// 🔐 STAFF CHECK
+function isStaff(member, guildId) {
+  return config[guildId]?.staffRole && member.roles.cache.has(config[guildId].staffRole);
+}
+
+// 🧠 COMMANDS
 const commands = [
   new SlashCommandBuilder()
     .setName('session')
-    .setDescription('Manage ERLC sessions')
-    .addSubcommand(sub =>
-      sub.setName('start')
-        .setDescription('Start session')
-        .addStringOption(opt =>
-          opt.setName('code')
-            .setDescription('Server Code')
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(sub =>
-      sub.setName('end')
-        .setDescription('End session')
-    )
+    .setDescription('Manage sessions')
+    .addSubcommand(s => s.setName('start').setDescription('Start').addStringOption(o => o.setName('code').setRequired(true)))
+    .addSubcommand(s => s.setName('end').setDescription('End')),
+
+  new SlashCommandBuilder()
+    .setName('configure')
+    .setDescription('Setup bot')
+    .addRoleOption(o => o.setName('staffrole').setDescription('Staff role'))
+    .addChannelOption(o => o.setName('logchannel').setDescription('Log channel')),
+
+  new SlashCommandBuilder()
+    .setName('ban')
+    .setDescription('Ban user')
+    .addUserOption(o => o.setName('user').setRequired(true))
+    .addStringOption(o => o.setName('reason')),
+
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kick user')
+    .addUserOption(o => o.setName('user').setRequired(true))
+    .addStringOption(o => o.setName('reason')),
+
+  new SlashCommandBuilder()
+    .setName('timeout')
+    .setDescription('Timeout user')
+    .addUserOption(o => o.setName('user').setRequired(true))
+    .addIntegerOption(o => o.setName('minutes').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('warn')
+    .setDescription('Warn user')
+    .addUserOption(o => o.setName('user').setRequired(true))
+    .addStringOption(o => o.setName('reason'))
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -55,127 +88,164 @@ client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
-// 🎮 COMMAND HANDLER
+// 📊 LOG FUNCTION
+async function sendLog(guild, embed) {
+  const channelId = config[guild.id]?.logChannel;
+  if (!channelId) return;
+  const channel = guild.channels.cache.get(channelId);
+  if (channel) channel.send({ embeds: [embed] });
+}
+
+// 🎮 HANDLER
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() && !interaction.isButton()) return;
 
-  // 🔘 BUTTON HANDLER
+  const guildId = interaction.guild.id;
+
+  if (!config[guildId]) config[guildId] = {};
+
+  // 🔘 BUTTONS
   if (interaction.isButton()) {
     if (interaction.customId === 'copy_code') {
-      return interaction.reply({
-        content: `📋 Server Code: **${activeSession.code}**`,
-        ephemeral: true
-      });
+      return interaction.reply({ content: `📋 Code: **${activeSession.code}**`, ephemeral: true });
     }
 
     if (interaction.customId === 'end_session') {
-      if (!interaction.member.roles.cache.has(STAFF_ROLE_ID)) {
-        return interaction.reply({ content: '❌ You are not staff.', ephemeral: true });
-      }
-
-      if (!activeSession) {
-        return interaction.reply({ content: '⚠️ No active session.', ephemeral: true });
-      }
+      if (!isStaff(interaction.member, guildId)) return interaction.reply({ content: '❌ Not staff.', ephemeral: true });
 
       const duration = Math.floor((Date.now() - activeSession.startTime) / 60000);
 
       const embed = new EmbedBuilder()
-        .setTitle('🔴 SESSION ENDED')
-        .setColor(0xFF0000)
-        .setDescription('Session has been ended by staff.')
+        .setTitle('🔴 Session Ended')
         .addFields(
-          { name: '👮 Host', value: activeSession.host, inline: true },
-          { name: '⏱️ Duration', value: `${duration} minutes`, inline: true }
+          { name: 'Host', value: activeSession.host, inline: true },
+          { name: 'Duration', value: `${duration} min`, inline: true }
         )
-        .setTimestamp();
+        .setColor('Red');
 
       activeSession = null;
-
       return interaction.update({ embeds: [embed], components: [] });
     }
   }
 
-  // 💬 SLASH COMMANDS
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === 'session') {
-      const sub = interaction.options.getSubcommand();
-
-      // 🟢 START
-      if (sub === 'start') {
-        if (!interaction.member.roles.cache.has(STAFF_ROLE_ID)) {
-          return interaction.reply({ content: '❌ You are not staff.', ephemeral: true });
-        }
-
-        if (activeSession) {
-          return interaction.reply({ content: '⚠️ Session already active.', ephemeral: true });
-        }
-
-        const code = interaction.options.getString('code');
-
-        activeSession = {
-          host: interaction.user.username,
-          code,
-          startTime: Date.now()
-        };
-
-        const embed = new EmbedBuilder()
-          .setTitle('🚨 CODE 3 CUSTOMS SESSION')
-          .setColor(0x00BFFF)
-          .setDescription('**A new session is live! Join now!**')
-          .addFields(
-            { name: '👮 Host', value: activeSession.host, inline: true },
-            { name: '🔑 Code', value: code, inline: true },
-            { name: '📢 Status', value: '🟢 Active', inline: true }
-          )
-          .setImage('https://cdn.discordapp.com/attachments/1478916407474258010/1501437526655766610/file_00000000cf0871f691f5783b432912e2.webp')
-          .setFooter({ text: 'Code 3 Customs | ERLC' })
-          .setTimestamp();
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId('copy_code')
-            .setLabel('📋 Copy Code')
-            .setStyle(ButtonStyle.Primary),
-
-          new ButtonBuilder()
-            .setCustomId('end_session')
-            .setLabel('🔴 End Session')
-            .setStyle(ButtonStyle.Danger)
-        );
-
-        await interaction.reply({
-          content: '@everyone',
-          embeds: [embed],
-          components: [row],
-          allowedMentions: { parse: ['everyone'] }
-        });
-      }
-
-      // 🔴 END COMMAND
-      if (sub === 'end') {
-        if (!interaction.member.roles.cache.has(STAFF_ROLE_ID)) {
-          return interaction.reply({ content: '❌ You are not staff.', ephemeral: true });
-        }
-
-        if (!activeSession) {
-          return interaction.reply({ content: '⚠️ No active session.', ephemeral: true });
-        }
-
-        const duration = Math.floor((Date.now() - activeSession.startTime) / 60000);
-
-        const embed = new EmbedBuilder()
-          .setTitle('🔴 SESSION ENDED')
-          .setColor(0xFF0000)
-          .addFields(
-            { name: '👮 Host', value: activeSession.host, inline: true },
-            { name: '⏱️ Duration', value: `${duration} minutes`, inline: true }
-          );
-
-        activeSession = null;
-
-        await interaction.reply({ embeds: [embed] });
-      }
+  // ⚙️ CONFIGURE
+  if (interaction.commandName === 'configure') {
+    if (!interaction.member.permissions.has('Administrator')) {
+      return interaction.reply({ content: '❌ Admin only.', ephemeral: true });
     }
+
+    const role = interaction.options.getRole('staffrole');
+    const channel = interaction.options.getChannel('logchannel');
+
+    if (role) config[guildId].staffRole = role.id;
+    if (channel) config[guildId].logChannel = channel.id;
+
+    saveConfig();
+
+    return interaction.reply({ content: '✅ Configuration saved.', ephemeral: true });
+  }
+
+  // 🟢 SESSION START
+  if (interaction.commandName === 'session') {
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === 'start') {
+      if (!isStaff(interaction.member, guildId)) return interaction.reply({ content: '❌ Not staff.', ephemeral: true });
+
+      const code = interaction.options.getString('code');
+
+      activeSession = {
+        host: interaction.user.username,
+        code,
+        startTime: Date.now()
+      };
+
+      const embed = new EmbedBuilder()
+        .setTitle('🚨 SESSION STARTED')
+        .setDescription('Join now!')
+        .addFields(
+          { name: 'Host', value: activeSession.host, inline: true },
+          { name: 'Code', value: code, inline: true }
+        )
+        .setImage('https://cdn.discordapp.com/attachments/1478916407474258010/1501437526655766610/file_00000000cf0871f691f5783b432912e2.webp')
+        .setColor(0x00BFFF);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('copy_code').setLabel('Copy Code').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('end_session').setLabel('End Session').setStyle(ButtonStyle.Danger)
+      );
+
+      return interaction.reply({
+        content: '@everyone',
+        embeds: [embed],
+        components: [row],
+        allowedMentions: { parse: ['everyone'] }
+      });
+    }
+
+    if (sub === 'end') {
+      if (!isStaff(interaction.member, guildId)) return;
+
+      const duration = Math.floor((Date.now() - activeSession.startTime) / 60000);
+
+      const embed = new EmbedBuilder()
+        .setTitle('🔴 Session Ended')
+        .addFields(
+          { name: 'Host', value: activeSession.host, inline: true },
+          { name: 'Duration', value: `${duration} min`, inline: true }
+        )
+        .setColor('Red');
+
+      activeSession = null;
+      return interaction.reply({ embeds: [embed] });
+    }
+  }
+
+  // 🔨 MOD COMMANDS
+  if (!isStaff(interaction.member, guildId)) {
+    return interaction.reply({ content: '❌ Not staff.', ephemeral: true });
+  }
+
+  const user = interaction.options.getUser('user');
+  const reason = interaction.options.getString('reason') || 'No reason';
+
+  if (interaction.commandName === 'ban') {
+    const member = await interaction.guild.members.fetch(user.id);
+    await member.ban({ reason });
+
+    const log = new EmbedBuilder().setTitle('User Banned').setDescription(`${user.tag}\nReason: ${reason}`).setColor('Red');
+    sendLog(interaction.guild, log);
+
+    return interaction.reply(`🔨 Banned ${user.tag}`);
+  }
+
+  if (interaction.commandName === 'kick') {
+    const member = await interaction.guild.members.fetch(user.id);
+    await member.kick(reason);
+
+    const log = new EmbedBuilder().setTitle('User Kicked').setDescription(`${user.tag}\nReason: ${reason}`).setColor('Orange');
+    sendLog(interaction.guild, log);
+
+    return interaction.reply(`🦶 Kicked ${user.tag}`);
+  }
+
+  if (interaction.commandName === 'timeout') {
+    const minutes = interaction.options.getInteger('minutes');
+    const member = await interaction.guild.members.fetch(user.id);
+
+    await member.timeout(minutes * 60000);
+
+    const log = new EmbedBuilder().setTitle('User Timed Out').setDescription(`${user.tag} for ${minutes} min`).setColor('Yellow');
+    sendLog(interaction.guild, log);
+
+    return interaction.reply(`🔇 Timed out ${user.tag}`);
+  }
+
+  if (interaction.commandName === 'warn') {
+    const log = new EmbedBuilder().setTitle('User Warned').setDescription(`${user.tag}\nReason: ${reason}`).setColor('Blue');
+    sendLog(interaction.guild, log);
+
+    return interaction.reply(`⚠️ Warned ${user.tag}`);
   }
 });
 

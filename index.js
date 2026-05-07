@@ -1,5 +1,3 @@
-
-```js
 const {
   Client,
   GatewayIntentBits,
@@ -10,7 +8,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  PermissionsBitField
+  PermissionsBitField,
+  ChannelType
 } = require('discord.js');
 
 const fs = require('fs');
@@ -287,7 +286,7 @@ client.on('messageCreate', async message => {
 
   // HI RESPONSE
   if (message.content.toLowerCase() === 'hi') {
-    message.channel.send('Hello!');
+    return message.channel.send('Hello!');
   }
 
   // LINK BLOCKER
@@ -297,45 +296,461 @@ client.on('messageCreate', async message => {
   }
 });
 
+// ================= INTERACTIONS =================
+
+client.on('interactionCreate', async interaction => {
+
+  if (!interaction.isChatInputCommand()) return;
+
+  const guildId = interaction.guild.id;
+
+  if (!config[guildId]) {
+    config[guildId] = {};
+  }
+
+  // ================= SET API KEY =================
+
+  if (interaction.commandName === 'setapikey') {
+
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({
+        content: '❌ Admin only.',
+        ephemeral: true
+      });
+    }
+
+    const key = interaction.options.getString('key');
+
+    config[guildId].erlcApiKey = key;
+
+    saveAll();
+
+    return interaction.reply({
+      content: '✅ ERLC API key saved.',
+      ephemeral: true
+    });
+  }
+
+  // ================= CONFIG =================
+
+  if (interaction.commandName === 'configure') {
+
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return interaction.reply({
+        content: '❌ Admin only.',
+        ephemeral: true
+      });
+    }
+
+    const role = interaction.options.getRole('staffrole');
+    const channel = interaction.options.getChannel('logchannel');
+
+    if (role) {
+      config[guildId].staffRole = role.id;
+    }
+
+    if (channel) {
+      config[guildId].logChannel = channel.id;
+    }
+
+    saveAll();
+
+    return interaction.reply({
+      content: '✅ Config saved.',
+      ephemeral: true
+    });
+  }
+
+  // ================= SESSION =================
+
+  if (interaction.commandName === 'session') {
+
+    const sub = interaction.options.getSubcommand();
+
+    // START SESSION
+    if (sub === 'start') {
+
+      if (!isStaff(interaction.member, guildId)) {
+        return interaction.reply({
+          content: '❌ Not staff.',
+          ephemeral: true
+        });
+      }
+
+      const code = interaction.options.getString('code');
+
+      activeSession = {
+        host: interaction.user.username,
+        code,
+        startTime: Date.now()
+      };
+
+      const embed = new EmbedBuilder()
+        .setColor('#3b82f6')
+        .setTitle('🚓 ERLC Session Started')
+        .setDescription(`Hosted by ${interaction.user}`)
+        .addFields(
+          {
+            name: '🔑 Join Code',
+            value: `\`${code}\``,
+            inline: true
+          },
+          {
+            name: '🕒 Started',
+            value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
+            inline: true
+          }
+        )
+        .setFooter({
+          text: 'Illinois State Roleplay'
+        })
+        .setTimestamp();
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('copy_code')
+          .setLabel('Copy Code')
+          .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+          .setCustomId('session_ping')
+          .setLabel('Ping')
+          .setStyle(ButtonStyle.Success)
+      );
+
+      return interaction.reply({
+        content: '@everyone',
+        embeds: [embed],
+        components: [row],
+        allowedMentions: {
+          parse: ['everyone']
+        }
+      });
+    }
+
+    // END SESSION
+    if (sub === 'end') {
+
+      if (!isStaff(interaction.member, guildId)) {
+        return interaction.reply({
+          content: '❌ Not staff.',
+          ephemeral: true
+        });
+      }
+
+      activeSession = null;
+
+      return interaction.reply({
+        content: '🔴 Session ended.'
+      });
+    }
+  }
+
+  // ================= STAFF CHECK =================
+
+  if (!isStaff(interaction.member, guildId)) {
+    return interaction.reply({
+      content: '❌ Not staff.',
+      ephemeral: true
+    });
+  }
+
+  try {
+
+    await interaction.deferReply({
+      ephemeral: true
+    });
+
+    const user = interaction.options.getUser('user');
+    const reason =
+      interaction.options.getString('reason') || 'No reason';
+
+    // ================= BAN =================
+
+    if (interaction.commandName === 'ban') {
+
+      const member = await interaction.guild.members.fetch(user.id);
+
+      await member.ban({ reason });
+
+      return interaction.editReply(`🔨 Banned ${user.tag}`);
+    }
+
+    // ================= KICK =================
+
+    if (interaction.commandName === 'kick') {
+
+      const member = await interaction.guild.members.fetch(user.id);
+
+      await member.kick(reason);
+
+      return interaction.editReply(`👢 Kicked ${user.tag}`);
+    }
+
+    // ================= TIMEOUT =================
+
+    if (interaction.commandName === 'timeout') {
+
+      const minutes =
+        interaction.options.getInteger('minutes');
+
+      const member =
+        await interaction.guild.members.fetch(user.id);
+
+      await member.timeout(minutes * 60000);
+
+      return interaction.editReply(
+        `⏰ Timed out ${user.tag}`
+      );
+    }
+
+    // ================= WARN =================
+
+    if (interaction.commandName === 'warn') {
+
+      if (!db.warnings[user.id]) {
+        db.warnings[user.id] = [];
+      }
+
+      db.warnings[user.id].push(reason);
+
+      saveAll();
+
+      return interaction.editReply(
+        `⚠️ Warned ${user.tag}`
+      );
+    }
+
+    // ================= PROMOTION =================
+
+    if (interaction.commandName === 'promotion') {
+
+      const rank = interaction.options.getString('rank');
+
+      const embed = new EmbedBuilder()
+        .setColor('#22c55e')
+        .setTitle('📈 Staff Promotion')
+        .setDescription(`${user} has been promoted!`)
+        .addFields(
+          {
+            name: 'New Rank',
+            value: rank,
+            inline: true
+          },
+          {
+            name: 'Promoted By',
+            value: interaction.user.tag,
+            inline: true
+          }
+        )
+        .setTimestamp();
+
+      await interaction.channel.send({
+        embeds: [embed]
+      });
+
+      await user.send(
+        `🎉 You were promoted to **${rank}** in ${interaction.guild.name}!`
+      ).catch(() => {});
+
+      return interaction.editReply(
+        `✅ Promotion logged for ${user.tag}`
+      );
+    }
+
+    // ================= INFRACTION =================
+
+    if (interaction.commandName === 'infraction') {
+
+      const embed = new EmbedBuilder()
+        .setColor('#ef4444')
+        .setTitle('⚠️ Staff Infraction')
+        .setDescription(`${user} received an infraction.`)
+        .addFields(
+          {
+            name: 'Reason',
+            value: reason
+          },
+          {
+            name: 'Issued By',
+            value: interaction.user.tag
+          }
+        )
+        .setTimestamp();
+
+      await interaction.channel.send({
+        embeds: [embed]
+      });
+
+      await user.send(
+        `⚠️ You received an infraction in ${interaction.guild.name}\nReason: ${reason}`
+      ).catch(() => {});
+
+      return interaction.editReply(
+        `✅ Infraction logged for ${user.tag}`
+      );
+    }
+
+    // ================= CLEAR =================
+
+    if (interaction.commandName === 'clear') {
+
+      const amount =
+        interaction.options.getInteger('amount');
+
+      await interaction.channel.bulkDelete(amount, true);
+
+      return interaction.editReply(
+        `🧹 Deleted ${amount} messages`
+      );
+    }
+
+    // ================= LOCK =================
+
+    if (interaction.commandName === 'lock') {
+
+      await interaction.channel.permissionOverwrites.edit(
+        interaction.guild.roles.everyone,
+        {
+          SendMessages: false
+        }
+      );
+
+      return interaction.editReply('🔒 Channel locked');
+    }
+
+    // ================= UNLOCK =================
+
+    if (interaction.commandName === 'unlock') {
+
+      await interaction.channel.permissionOverwrites.edit(
+        interaction.guild.roles.everyone,
+        {
+          SendMessages: true
+        }
+      );
+
+      return interaction.editReply('🔓 Channel unlocked');
+    }
+
+    // ================= LOCKDOWN =================
+
+    if (interaction.commandName === 'lockdown') {
+
+      interaction.guild.channels.cache.forEach(async channel => {
+
+        if (
+          channel.type === ChannelType.GuildText ||
+          channel.type === ChannelType.GuildAnnouncement
+        ) {
+          await channel.permissionOverwrites.edit(
+            interaction.guild.roles.everyone,
+            {
+              SendMessages: false
+            }
+          ).catch(() => {});
+        }
+      });
+
+      return interaction.editReply(
+        '🚨 Server lockdown enabled.'
+      );
+    }
+
+    // ================= UNLOCKDOWN =================
+
+    if (interaction.commandName === 'unlockdown') {
+
+      interaction.guild.channels.cache.forEach(async channel => {
+
+        if (
+          channel.type === ChannelType.GuildText ||
+          channel.type === ChannelType.GuildAnnouncement
+        ) {
+          await channel.permissionOverwrites.edit(
+            interaction.guild.roles.everyone,
+            {
+              SendMessages: true
+            }
+          ).catch(() => {});
+        }
+      });
+
+      return interaction.editReply(
+        '✅ Server lockdown removed.'
+      );
+    }
+
+    // ================= SLOWMODE =================
+
+    if (interaction.commandName === 'slowmode') {
+
+      const seconds =
+        interaction.options.getInteger('seconds');
+
+      await interaction.channel.setRateLimitPerUser(seconds);
+
+      return interaction.editReply(
+        `🐢 Slowmode set to ${seconds}s`
+      );
+    }
+
+    // ================= SAY =================
+
+    if (interaction.commandName === 'say') {
+
+      const msg =
+        interaction.options.getString('message');
+
+      await interaction.channel.send(msg);
+
+      return interaction.editReply('✅ Sent');
+    }
+
+    // ================= TICKET =================
+
+    if (interaction.commandName === 'ticket') {
+
+      const ch = await interaction.guild.channels.create({
+        name: `ticket-${interaction.user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: interaction.guild.id,
+            deny: ['ViewChannel']
+          },
+          {
+            id: interaction.user.id,
+            allow: ['ViewChannel', 'SendMessages']
+          }
+        ]
+      });
+
+      return interaction.editReply(
+        `🎟️ Ticket created: ${ch}`
+      );
+    }
+
+    // ================= CLOSE =================
+
+    if (interaction.commandName === 'close') {
+
+      await interaction.channel.delete();
+    }
+
+  } catch (err) {
+
+    console.error(err);
+
+    if (interaction.deferred) {
+
+      interaction.editReply(
+        '❌ Error. Check bot permissions.'
+      );
+    }
+  }
+});
+
 // ================= LOGIN =================
 
-client.login(process.env.TOKEN);
-```
-
-# package.json
-
-```json
-{
-  "name": "erlc-bot",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "discord.js": "^14.15.3",
-    "dotenv": "^16.4.5"
-  }
-}
-```
-
-# .env
-
-```env
-TOKEN=YOUR_BOT_TOKEN
-```
-
-# config.json
-
-```json
-{}
-```
-
-# database.json
-
-```json
-{
-  "warnings": {}
-}
-```
 client.login(process.env.TOKEN);

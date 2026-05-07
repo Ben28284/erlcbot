@@ -160,6 +160,40 @@ const commands = [
         .setDescription('Reason')
     ),
 
+  // PROMOTION
+  new SlashCommandBuilder()
+    .setName('promote')
+    .setDescription('Promote a user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('rank')
+        .setDescription('New rank')
+        .setRequired(true)
+    ),
+
+  // INFRACTION
+  new SlashCommandBuilder()
+    .setName('infraction')
+    .setDescription('Issue an infraction')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason')
+        .setRequired(true)
+    ),
+
   // UTILITY
   new SlashCommandBuilder()
     .setName('clear')
@@ -216,6 +250,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
+
     console.log('Registering slash commands...');
 
     await rest.put(
@@ -224,6 +259,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     );
 
     console.log('Commands registered.');
+
   } catch (err) {
     console.error(err);
   }
@@ -240,6 +276,11 @@ client.once('ready', () => {
 client.on('messageCreate', async message => {
 
   if (message.author.bot) return;
+
+  // HI RESPONSE
+  if (message.content.toLowerCase() === 'hi') {
+    await message.reply('Hello!');
+  }
 
   // LINK BLOCKER
   if (message.content.includes('http')) {
@@ -311,18 +352,14 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    // COPY CODE
     if (interaction.customId === 'copy_code') {
-
       return interaction.reply({
         content: `📋 Join Code: ${activeSession.code}`,
         ephemeral: true
       });
     }
 
-    // SESSION PING
     if (interaction.customId === 'session_ping') {
-
       return interaction.reply({
         content: '@everyone 🚨 A new session is active!',
         allowedMentions: {
@@ -331,16 +368,13 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    // REFRESH
     if (interaction.customId === 'refresh_status') {
-
       return interaction.reply({
         content: '🔄 Server stats refreshed.',
         ephemeral: true
       });
     }
 
-    // END SESSION
     if (interaction.customId === 'end_session') {
 
       if (!isStaff(interaction.member, guildId)) {
@@ -397,13 +431,8 @@ client.on('interactionCreate', async interaction => {
     const role = interaction.options.getRole('staffrole');
     const channel = interaction.options.getChannel('logchannel');
 
-    if (role) {
-      config[guildId].staffRole = role.id;
-    }
-
-    if (channel) {
-      config[guildId].logChannel = channel.id;
-    }
+    if (role) config[guildId].staffRole = role.id;
+    if (channel) config[guildId].logChannel = channel.id;
 
     saveAll();
 
@@ -419,7 +448,6 @@ client.on('interactionCreate', async interaction => {
 
     const sub = interaction.options.getSubcommand();
 
-    // START SESSION
     if (sub === 'start') {
 
       if (!isStaff(interaction.member, guildId)) {
@@ -441,44 +469,15 @@ client.on('interactionCreate', async interaction => {
         .setColor('#0099ff')
         .setTitle('🌐 Server Status')
         .setDescription(
-          'Welcome to **TEST Roleplay!** We strive to host fun, realistic and most importantly engaging sessions.\nSessions may be limited based on staff availability.\nJoin us for an immersive roleplaying experience that you will never forget!'
+          'Welcome to TEST Roleplay!'
         )
         .setImage('https://cdn.discordapp.com/attachments/1478916407474258010/1501437526655766610/file_00000000cf0871f691f5783b432912e2.webp')
         .addFields(
           {
-            name: '👥 Players',
-            value: '```0/40```',
-            inline: false
-          },
-          {
-            name: '📥 Queue',
-            value: '```0```',
-            inline: false
-          },
-          {
-            name: '🛡️ Staff',
-            value: '```1```',
-            inline: false
-          },
-          {
-            name: '📍 Server',
-            value: 'TEST Roleplay | New | Fun',
-            inline: false
-          },
-          {
             name: '🔑 Join Code',
-            value: code,
-            inline: true
-          },
-          {
-            name: '✅ Verification',
-            value: 'Disabled',
-            inline: true
+            value: code
           }
-        )
-        .setFooter({
-          text: `Updated at ${new Date().toLocaleTimeString()}`
-        });
+        );
 
       const row = new ActionRowBuilder().addComponents(
 
@@ -489,7 +488,7 @@ client.on('interactionCreate', async interaction => {
 
         new ButtonBuilder()
           .setCustomId('session_ping')
-          .setLabel('Session Pings')
+          .setLabel('Session Ping')
           .setStyle(ButtonStyle.Success),
 
         new ButtonBuilder()
@@ -514,15 +513,7 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    // END SESSION
     if (sub === 'end') {
-
-      if (!isStaff(interaction.member, guildId)) {
-        return interaction.reply({
-          content: '❌ Not staff.',
-          ephemeral: true
-        });
-      }
 
       activeSession = null;
 
@@ -541,8 +532,6 @@ client.on('interactionCreate', async interaction => {
     });
   }
 
-  // ================= COMMANDS =================
-
   try {
 
     await interaction.deferReply({
@@ -550,49 +539,38 @@ client.on('interactionCreate', async interaction => {
     });
 
     const user = interaction.options.getUser('user');
-    const reason =
-      interaction.options.getString('reason') || 'No reason';
+    const reason = interaction.options.getString('reason') || 'No reason';
 
     // BAN
     if (interaction.commandName === 'ban') {
 
-      const member =
-        await interaction.guild.members.fetch(user.id);
+      const member = await interaction.guild.members.fetch(user.id);
 
       await member.ban({ reason });
 
-      return interaction.editReply(
-        `🔨 Banned ${user.tag}`
-      );
+      return interaction.editReply(`🔨 Banned ${user.tag}`);
     }
 
     // KICK
     if (interaction.commandName === 'kick') {
 
-      const member =
-        await interaction.guild.members.fetch(user.id);
+      const member = await interaction.guild.members.fetch(user.id);
 
       await member.kick(reason);
 
-      return interaction.editReply(
-        `👢 Kicked ${user.tag}`
-      );
+      return interaction.editReply(`👢 Kicked ${user.tag}`);
     }
 
     // TIMEOUT
     if (interaction.commandName === 'timeout') {
 
-      const minutes =
-        interaction.options.getInteger('minutes');
+      const minutes = interaction.options.getInteger('minutes');
 
-      const member =
-        await interaction.guild.members.fetch(user.id);
+      const member = await interaction.guild.members.fetch(user.id);
 
       await member.timeout(minutes * 60000);
 
-      return interaction.editReply(
-        `⏰ Timed out ${user.tag}`
-      );
+      return interaction.editReply(`⏰ Timed out ${user.tag}`);
     }
 
     // WARN
@@ -606,22 +584,83 @@ client.on('interactionCreate', async interaction => {
 
       saveAll();
 
-      return interaction.editReply(
-        `⚠️ Warned ${user.tag}`
-      );
+      return interaction.editReply(`⚠️ Warned ${user.tag}`);
+    }
+
+    // PROMOTE
+    if (interaction.commandName === 'promote') {
+
+      const rank = interaction.options.getString('rank');
+
+      const embed = new EmbedBuilder()
+        .setColor('#00ff88')
+        .setTitle('📈 Promotion')
+        .setDescription(`${user} has been promoted!`)
+        .addFields(
+          {
+            name: 'New Rank',
+            value: rank
+          },
+          {
+            name: 'Promoted By',
+            value: interaction.user.tag
+          }
+        );
+
+      await interaction.channel.send({
+        embeds: [embed]
+      });
+
+      await user.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#00ff88')
+            .setTitle('📈 Promotion')
+            .setDescription(`You were promoted to ${rank}`)
+        ]
+      }).catch(() => {});
+
+      return interaction.editReply(`✅ Promoted ${user.tag}`);
+    }
+
+    // INFRACTION
+    if (interaction.commandName === 'infraction') {
+
+      const embed = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('⚠️ Infraction')
+        .setDescription(`${user} received an infraction.`)
+        .addFields(
+          {
+            name: 'Reason',
+            value: reason
+          }
+        );
+
+      await interaction.channel.send({
+        embeds: [embed]
+      });
+
+      await user.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('⚠️ Infraction')
+            .setDescription(`Reason: ${reason}`)
+        ]
+      }).catch(() => {});
+
+      return interaction.editReply(`✅ Infraction issued`);
     }
 
     // CLEAR
     if (interaction.commandName === 'clear') {
 
-      const amount =
-        interaction.options.getInteger('amount');
+      const amount = interaction.options.getInteger('amount');
 
       await interaction.channel.bulkDelete(amount, true);
 
-      return interaction.editReply(
-        `🧹 Deleted ${amount} messages`
-      );
+      return interaction.editReply(`🧹 Deleted ${amount} messages`);
     }
 
     // LOCK
@@ -653,21 +692,17 @@ client.on('interactionCreate', async interaction => {
     // SLOWMODE
     if (interaction.commandName === 'slowmode') {
 
-      const seconds =
-        interaction.options.getInteger('seconds');
+      const seconds = interaction.options.getInteger('seconds');
 
       await interaction.channel.setRateLimitPerUser(seconds);
 
-      return interaction.editReply(
-        `🐢 Slowmode set to ${seconds}s`
-      );
+      return interaction.editReply(`🐢 Slowmode set to ${seconds}s`);
     }
 
     // SAY
     if (interaction.commandName === 'say') {
 
-      const msg =
-        interaction.options.getString('message');
+      const msg = interaction.options.getString('message');
 
       await interaction.channel.send(msg);
 
@@ -691,9 +726,7 @@ client.on('interactionCreate', async interaction => {
         ]
       });
 
-      return interaction.editReply(
-        `🎟️ Ticket created: ${ch}`
-      );
+      return interaction.editReply(`🎟️ Ticket created: ${ch}`);
     }
 
     // CLOSE
@@ -707,10 +740,7 @@ client.on('interactionCreate', async interaction => {
     console.error(err);
 
     if (interaction.deferred) {
-
-      interaction.editReply(
-        '❌ Error. Check bot permissions.'
-      );
+      interaction.editReply('❌ Error. Check permissions.');
     }
   }
 });

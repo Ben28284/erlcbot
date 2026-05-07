@@ -121,7 +121,26 @@ const commands = [
         .setName('logchannel')
         .setDescription('Log channel')
     )
-];
+  // LOCK CHANNEL
+  new SlashCommandBuilder()
+    .setName('lock')
+    .setDescription('Lock current channel'),
+
+  // UNLOCK CHANNEL
+  new SlashCommandBuilder()
+    .setName('unlock')
+    .setDescription('Unlock current channel'),
+
+  // SERVER LOCKDOWN
+  new SlashCommandBuilder()
+    .setName('lockdown')
+    .setDescription('Lock all server channels'),
+
+  // SERVER UNLOCKDOWN
+  new SlashCommandBuilder()
+    .setName('unlockdown')
+    .setDescription('Unlock all server channels'),
+  ];
 
 // ================= REGISTER =================
 
@@ -197,7 +216,183 @@ client.on('interactionCreate', async interaction => {
 
   if (!config[guildId]) {
     config[guildId] = {};
+// ================= LOCK =================
+
+if (interaction.commandName === 'lock') {
+
+  if (!isStaff(interaction.member, guildId)) {
+    return interaction.reply({
+      content: '❌ Not staff.',
+      ephemeral: true
+    });
   }
+
+  await interaction.channel.permissionOverwrites.edit(
+    interaction.guild.roles.everyone,
+    {
+      SendMessages: false
+    }
+  );
+
+  const embed = new EmbedBuilder()
+    .setColor('#ef4444')
+    .setTitle('🔒 Channel Locked')
+    .setDescription(
+      `This channel has been locked by ${interaction.user}.`
+    )
+    .setTimestamp();
+
+  return interaction.reply({
+    embeds: [embed]
+  });
+}
+
+// ================= UNLOCK =================
+
+if (interaction.commandName === 'unlock') {
+
+  if (!isStaff(interaction.member, guildId)) {
+    return interaction.reply({
+      content: '❌ Not staff.',
+      ephemeral: true
+    });
+  }
+
+  await interaction.channel.permissionOverwrites.edit(
+    interaction.guild.roles.everyone,
+    {
+      SendMessages: true
+    }
+  );
+
+  const embed = new EmbedBuilder()
+    .setColor('#22c55e')
+    .setTitle('🔓 Channel Unlocked')
+    .setDescription(
+      `This channel has been unlocked by ${interaction.user}.`
+    )
+    .setTimestamp();
+
+  return interaction.reply({
+    embeds: [embed]
+  });
+}
+
+// ================= LOCKDOWN =================
+
+if (interaction.commandName === 'lockdown') {
+
+  if (!isStaff(interaction.member, guildId)) {
+    return interaction.reply({
+      content: '❌ Not staff.',
+      ephemeral: true
+    });
+  }
+
+  await interaction.deferReply();
+
+  let locked = 0;
+
+  for (const channel of interaction.guild.channels.cache.values()) {
+
+    try {
+
+      await channel.permissionOverwrites.edit(
+        interaction.guild.roles.everyone,
+        {
+          SendMessages: false
+        }
+      );
+
+      locked++;
+
+    } catch (err) {
+      console.log(`Failed to lock ${channel.name}`);
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor('#ef4444')
+    .setTitle('🚨 SERVER LOCKDOWN')
+    .setDescription(
+      'All server channels have been locked.'
+    )
+    .addFields(
+      {
+        name: 'Locked By',
+        value: interaction.user.tag,
+        inline: true
+      },
+      {
+        name: 'Channels Locked',
+        value: `${locked}`,
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+  return interaction.editReply({
+    embeds: [embed]
+  });
+}
+
+// ================= UNLOCKDOWN =================
+
+if (interaction.commandName === 'unlockdown') {
+
+  if (!isStaff(interaction.member, guildId)) {
+    return interaction.reply({
+      content: '❌ Not staff.',
+      ephemeral: true
+    });
+  }
+
+  await interaction.deferReply();
+
+  let unlocked = 0;
+
+  for (const channel of interaction.guild.channels.cache.values()) {
+
+    try {
+
+      await channel.permissionOverwrites.edit(
+        interaction.guild.roles.everyone,
+        {
+          SendMessages: true
+        }
+      );
+
+      unlocked++;
+
+    } catch (err) {
+      console.log(`Failed to unlock ${channel.name}`);
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor('#22c55e')
+    .setTitle('✅ SERVER UNLOCKED')
+    .setDescription(
+      'All server channels have been unlocked.'
+    )
+    .addFields(
+      {
+        name: 'Unlocked By',
+        value: interaction.user.tag,
+        inline: true
+      },
+      {
+        name: 'Channels Unlocked',
+        value: `${unlocked}`,
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+  return interaction.editReply({
+    embeds: [embed]
+  });
+}  }
 
   // ================= CONFIG =================
 

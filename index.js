@@ -338,3 +338,4 @@ TOKEN=YOUR_BOT_TOKEN
   "warnings": {}
 }
 ```
+client.login(process.env.TOKEN);

@@ -203,27 +203,56 @@ const commands = [
 
   // ================= INFRACTION =================
 
-  new SlashCommandBuilder()
-    .setName('infraction')
-    .setDescription('Issue an infraction')
-    .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('User')
-        .setRequired(true)
+ if (interaction.commandName === 'infraction') {
+
+  const punishment =
+    interaction.options.getString('punishment');
+
+  const infractionID = generateInfractionID();
+
+  const embed = new EmbedBuilder()
+    .setColor('#ef4444')
+    .setTitle('Staff Consequences & Discipline')
+    .setDescription(`
+The high-ranking team at Sydney City Roleplay is sad to announce the infraction of ${user}.
+
+Below you can find more relevant information on this infraction.
+`)
+    .addFields(
+      {
+        name: 'Username',
+        value: `${user.tag}`,
+        inline: false
+      },
+      {
+        name: 'Punishment',
+        value: punishment,
+        inline: false
+      },
+      {
+        name: 'Reason',
+        value: reason,
+        inline: false
+      },
+      {
+        name: 'Infraction ID',
+        value: infractionID,
+        inline: false
+      }
     )
-    .addStringOption(option =>
-      option
-        .setName('punishment')
-        .setDescription('Punishment type')
-        .setRequired(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Reason')
-        .setRequired(true)
-    ),
+    .setFooter({
+      text: 'Sydney City Roleplay'
+    })
+    .setTimestamp();
+
+  await interaction.channel.send({
+    embeds: [embed]
+  });
+
+  return interaction.editReply(
+    `✅ Infraction issued to ${user.tag}`
+  );
+}
 
   // ================= CLEAR =================
 

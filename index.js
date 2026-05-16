@@ -53,19 +53,35 @@ function isStaff(member, guildId) {
 
 const commands = [
 
+  // ================= PANEL =================
+
   new SlashCommandBuilder()
     .setName('panel')
     .setDescription('Send support panel'),
 
+  // ================= SESSION =================
+
   new SlashCommandBuilder()
-    .setName('say')
-    .setDescription('Bot says message')
-    .addStringOption(option =>
-      option
-        .setName('message')
-        .setDescription('Message')
-        .setRequired(true)
+    .setName('session')
+    .setDescription('Manage sessions')
+    .addSubcommand(sub =>
+      sub
+        .setName('start')
+        .setDescription('Start session')
+        .addStringOption(option =>
+          option
+            .setName('code')
+            .setDescription('Server code')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('end')
+        .setDescription('End session')
     ),
+
+  // ================= CONFIG =================
 
   new SlashCommandBuilder()
     .setName('configure')
@@ -84,7 +100,185 @@ const commands = [
       option
         .setName('ticketrole')
         .setDescription('Ticket support role')
+    ),
+
+  // ================= SAY =================
+
+  new SlashCommandBuilder()
+    .setName('say')
+    .setDescription('Bot says message')
+    .addStringOption(option =>
+      option
+        .setName('message')
+        .setDescription('Message')
+        .setRequired(true)
+    ),
+
+  // ================= BAN =================
+
+  new SlashCommandBuilder()
+    .setName('ban')
+    .setDescription('Ban user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
     )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason')
+    ),
+
+  // ================= KICK =================
+
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kick user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason')
+    ),
+
+  // ================= TIMEOUT =================
+
+  new SlashCommandBuilder()
+    .setName('timeout')
+    .setDescription('Timeout user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('minutes')
+        .setDescription('Minutes')
+        .setRequired(true)
+    ),
+
+  // ================= WARN =================
+
+  new SlashCommandBuilder()
+    .setName('warn')
+    .setDescription('Warn user')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason')
+    ),
+
+  // ================= PROMOTION =================
+
+  new SlashCommandBuilder()
+    .setName('promotion')
+    .setDescription('Promote a staff member')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('rank')
+        .setDescription('New rank')
+        .setRequired(true)
+    ),
+
+  // ================= INFRACTION =================
+
+  new SlashCommandBuilder()
+    .setName('infraction')
+    .setDescription('Issue an infraction')
+    .addUserOption(option =>
+      option
+        .setName('user')
+        .setDescription('User')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('punishment')
+        .setDescription('Punishment type')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason')
+        .setRequired(true)
+    ),
+
+  // ================= CLEAR =================
+
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('Clear messages')
+    .addIntegerOption(option =>
+      option
+        .setName('amount')
+        .setDescription('Amount')
+        .setRequired(true)
+    ),
+
+  // ================= LOCK =================
+
+  new SlashCommandBuilder()
+    .setName('lock')
+    .setDescription('Lock current channel'),
+
+  // ================= UNLOCK =================
+
+  new SlashCommandBuilder()
+    .setName('unlock')
+    .setDescription('Unlock current channel'),
+
+  // ================= LOCKDOWN =================
+
+  new SlashCommandBuilder()
+    .setName('lockdown')
+    .setDescription('Lock all server channels'),
+
+  // ================= UNLOCKDOWN =================
+
+  new SlashCommandBuilder()
+    .setName('unlockdown')
+    .setDescription('Unlock all server channels'),
+
+  // ================= SLOWMODE =================
+
+  new SlashCommandBuilder()
+    .setName('slowmode')
+    .setDescription('Set slowmode')
+    .addIntegerOption(option =>
+      option
+        .setName('seconds')
+        .setDescription('Seconds')
+        .setRequired(true)
+    ),
+
+  // ================= CLOSE =================
+
+  new SlashCommandBuilder()
+    .setName('close')
+    .setDescription('Close ticket')
+
 ];
 
 // ================= REGISTER =================
